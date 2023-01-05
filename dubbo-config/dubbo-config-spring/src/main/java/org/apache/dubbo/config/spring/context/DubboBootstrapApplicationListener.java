@@ -67,6 +67,7 @@ public class DubboBootstrapApplicationListener extends OnceApplicationContextEve
     }
 
     private void onContextRefreshedEvent(ContextRefreshedEvent event) {
+        // 启动 Dubbo
         dubboBootstrap.start();
     }
 

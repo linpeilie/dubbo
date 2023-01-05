@@ -38,13 +38,18 @@ public class Application {
     }
 
     private static void runWithBootstrap() {
+        // 将一个服务的引用，封装为 ReferenceConfig，并指定其接口
         ReferenceConfig<DemoService> reference = new ReferenceConfig<>();
         reference.setInterface(DemoService.class);
         reference.setGeneric("true");
 
         DubboBootstrap bootstrap = DubboBootstrap.getInstance();
-        bootstrap.application(new ApplicationConfig("dubbo-demo-api-consumer"))
+        bootstrap
+                // 应用信息
+                .application(new ApplicationConfig("dubbo-demo-api-consumer"))
+                // 注册中心
                 .registry(new RegistryConfig("zookeeper://127.0.0.1:2181"))
+                // 远程服务引用
                 .reference(reference)
                 .start();
 

@@ -303,18 +303,21 @@ public class DubboProtocol extends AbstractProtocol {
             }
         }
 
+        // 开启服务
         openServer(url);
+        // 优化序列化效率
         optimizeSerialization(url);
 
         return exporter;
     }
 
     private void openServer(URL url) {
-        // find server.
+        // host:port
         String key = url.getAddress();
         //client can export a service which's only for server to invoke
         boolean isServer = url.getParameter(IS_SERVER_KEY, true);
         if (isServer) {
+            // 同一个端口只会启动一个服务器
             ProtocolServer server = serverMap.get(key);
             if (server == null) {
                 synchronized (this) {

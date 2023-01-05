@@ -38,14 +38,20 @@ public class Application {
     }
 
     private static void startWithBootstrap() {
+        // 将一个具体的服务，封装为 ServerBean，指定其接口和实现类
         ServiceConfig<DemoServiceImpl> service = new ServiceConfig<>();
         service.setInterface(DemoService.class);
         service.setRef(new DemoServiceImpl());
 
         DubboBootstrap bootstrap = DubboBootstrap.getInstance();
-        bootstrap.application(new ApplicationConfig("dubbo-demo-api-provider"))
+        bootstrap
+                // 服务名称
+                .application(new ApplicationConfig("dubbo-demo-api-provider"))
+                // 注册中心地址
                 .registry(new RegistryConfig("zookeeper://127.0.0.1:2181"))
+                // 服务列表
                 .service(service)
+                // 启动
                 .start()
                 .await();
     }

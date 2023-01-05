@@ -516,17 +516,29 @@ public class DubboBootstrap {
             return;
         }
 
+        // Dubbo 中定义了框架扩展接口 —— FrameworkExt，定义了框架的初始化（initialize）、启动（start）、销毁（destroy）函数
+        // 这里调用其 initialize 方法
         ApplicationModel.initFrameworkExts();
 
+        // 读取配置中心的配置，将这些配置保存到 Environment 对象，最后使用这些配置更新 ApplicationConfig、MonitorConfig、ModuleConfig 等对象的属性
+        // 配置中心可以有多个，在获取配置的时候，顺次访问每个配置中心，配置保存到本地时，访问的配置中心配置会覆盖之前的配置数据
         startConfigCenter();
 
+        // 创建 RegistryConfig 和 ProtocolConfig 对象，并设置其属性
+        // 解析以 dubbo.registries. 和 dubbo.protocols. 为前缀的配置，得到 registryIds 和 protocolIds，
+        // 然后创建对应的 RegistryConfig 和 ProtocolConfig 对象并设置 ID，然后调用 refresh 方法，对象自身的属性会自动赋值
         loadRemoteConfigs();
 
+        // 检查各配置对象的各个属性设置的值是否合法
         checkGlobalConfigs();
 
         // @since 2.7.8
+        // 启动元数据中心
         startMetadataCenter();
 
+        // 初始化元数据导出服务
+        // 根据 metadataType 使用 SPI 加载对应的 WritableMetadataService 实现
+        // metadataType 分为 local 和 remote，前者数据仅保留在内存，后者数据会发布到远程
         initMetadataService();
 
         if (logger.isInfoEnabled()) {
@@ -593,7 +605,7 @@ public class DubboBootstrap {
     }
 
     private void startConfigCenter() {
-
+        // 如果没有配置中心，则尝试使用注册中心作为配置中心
         useRegistryAsConfigCenterIfNecessary();
 
         Collection<ConfigCenterConfig> configCenters = configManager.getConfigCenters();
@@ -757,11 +769,6 @@ public class DubboBootstrap {
                         , extensionClass.getSimpleName(), protocol, supported ? "supports" : "does not support", centerType));
             }
         }
-
-        if (logger.isInfoEnabled()) {
-            logger.info(format("The registry[%s] will be %s as the %s center", registryConfig,
-                    supported ? "used" : "not used", centerType));
-        }
         return supported;
     }
 
@@ -832,6 +839,7 @@ public class DubboBootstrap {
     private void loadRemoteConfigs() {
         // registry ids to registry configs
         List<RegistryConfig> tmpRegistries = new ArrayList<>();
+        // 解析 dubbo.registries. 前缀的配置
         Set<String> registryIds = configManager.getRegistryIds();
         registryIds.forEach(id -> {
             if (tmpRegistries.stream().noneMatch(reg -> reg.getId().equals(id))) {
@@ -848,6 +856,7 @@ public class DubboBootstrap {
 
         // protocol ids to protocol configs
         List<ProtocolConfig> tmpProtocols = new ArrayList<>();
+        // 解析 dubbo.protocols. 前缀的配置
         Set<String> protocolIds = configManager.getProtocolIds();
         protocolIds.forEach(id -> {
             if (tmpProtocols.stream().noneMatch(prot -> prot.getId().equals(id))) {
@@ -877,13 +886,13 @@ public class DubboBootstrap {
      */
     public DubboBootstrap start() {
         if (started.compareAndSet(false, true)) {
+            // 设置状态值
             destroyed.set(false);
             ready.set(false);
+            // 执行前置工作
             initialize();
-            if (logger.isInfoEnabled()) {
-                logger.info(NAME + " is starting...");
-            }
-            // 1. export Dubbo Services
+
+            // 导出服务
             exportServices();
 
             // Not only provider register
@@ -894,7 +903,9 @@ public class DubboBootstrap {
                 registerServiceInstance();
             }
 
+            // 服务的引用
             referServices();
+
             if (asyncExportingFutures.size() > 0) {
                 new Thread(() -> {
                     try {
@@ -1074,6 +1085,7 @@ public class DubboBootstrap {
             serviceConfig.setBootstrap(this);
 
             if (exportAsync) {
+                // 异步导出
                 ExecutorService executor = executorRepository.getServiceExporterExecutor();
                 Future<?> future = executor.submit(() -> {
                     try {
@@ -1097,6 +1109,7 @@ public class DubboBootstrap {
                     sc.toString() + "]. Only one service can be exported for the same triple (group, interface, version), " +
                     "please modify the group or version if you really need to export multiple services of the same interface.");
         }
+        // 调用 ServiceConfig.export 导出具体的服务
         sc.export();
         exportedServices.put(sc.getServiceName(), sc);
     }

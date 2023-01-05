@@ -117,6 +117,15 @@ public abstract class Wrapper {
             return OBJECT_WRAPPER;
         }
 
+        // 从缓存中获取实例，如果没有命中，则创建 Wrapper，同时还保证了线程的安全性
+        // 这里实际上等价于：
+        /*
+            Wrapper ret = WRAPPER.get(c);
+            if (ret == null) {
+                ret = makeWrapper(c);
+                WRAPPER_MAP.put(c, ret);
+            }
+         */
         return WRAPPER_MAP.computeIfAbsent(c, Wrapper::makeWrapper);
     }
 

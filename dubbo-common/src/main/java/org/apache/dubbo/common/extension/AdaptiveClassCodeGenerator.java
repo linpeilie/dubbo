@@ -87,16 +87,20 @@ public class AdaptiveClassCodeGenerator {
      * generate and return class code
      */
     public String generate() {
-        // no need to generate adaptive class since there's no adaptive method found.
+        // Dubbo 要求该接口至少有一个方法被 Adaptive 注解
         if (!hasAdaptiveMethod()) {
             throw new IllegalStateException("No adaptive method exist on extension " + type.getName() + ", refuse to create the adaptive class!");
         }
 
         StringBuilder code = new StringBuilder();
+        // 生成 package 语句：package + type 所在包
         code.append(generatePackageInfo());
+        // 生成 import 语句：import + ExtensionLoader 全限定名
         code.append(generateImports());
+        // 生成类定义语句：public class + type简单名称 + $Adaptive + implements + type全限定名 + {
         code.append(generateClassDeclaration());
 
+        // 生成方法
         Method[] methods = type.getMethods();
         for (Method method : methods) {
             code.append(generateMethod(method));
@@ -156,10 +160,15 @@ public class AdaptiveClassCodeGenerator {
      * generate method declaration
      */
     private String generateMethod(Method method) {
+        // 返回值类型
         String methodReturnType = method.getReturnType().getCanonicalName();
+        // 方法名
         String methodName = method.getName();
+        // 生成方法内容
         String methodContent = generateMethodContent(method);
+        // 方法参数
         String methodArgs = generateMethodArguments(method);
+        // 方法需要抛出的异常
         String methodThrows = generateMethodThrows(method);
         return String.format(CODE_METHOD_DECLARATION, methodReturnType, methodName, methodArgs, methodThrows, methodContent);
     }
@@ -201,32 +210,48 @@ public class AdaptiveClassCodeGenerator {
         Adaptive adaptiveAnnotation = method.getAnnotation(Adaptive.class);
         StringBuilder code = new StringBuilder(512);
         if (adaptiveAnnotation == null) {
+            // 无 Adaptive 注解的方法内容
+            // 直接抛出异常：throw new UnsupportedOperationException
             return generateUnsupported(method);
         } else {
+            // 有 Adaptive 注解的方法内容
+
+            // 方法代理逻辑会从 URL 中提取目标拓展的名称，因此这里首先要获取的 URL 参数
             int urlTypeIndex = getUrlTypeIndex(method);
 
             // found parameter in URL type
             if (urlTypeIndex != -1) {
-                // Null Point check
+                // 增加判断 URL 不能为空的代码逻辑
                 code.append(generateUrlNullCheck(urlTypeIndex));
             } else {
-                // did not find parameter in URL type
+                // 遍历方法，寻找可以返回 URL 的 getter 方法，如果没有获取到的则抛出异常
                 code.append(generateUrlAssignmentIndirectly(method));
             }
 
+            // 这里获取 Adaptive 注解的 value 值
+            // 如果没有的话，则将驼峰式命名的类名，用.来分隔大写字符，然后全部改为小写
+            // 例如 LoadBalance 经过处理后，得到 load.balance
             String[] value = getMethodAdaptiveValue(adaptiveAnnotation);
 
+            // 判断方法是否有 Invocation 参数
             boolean hasInvocation = hasInvocationArgument(method);
 
+            // 如果有 Invocation 参数时，增加判空的逻辑
             code.append(generateInvocationArgumentNullCheck(method));
 
             code.append(generateExtNameAssignment(value, hasInvocation));
-            // check extName == null?
+            // 增加 extName 判空逻辑，如果 extName == null，则抛出异常
             code.append(generateExtNameNullCheck(value));
 
+            // 根据 extName 获取接口的具体实现
+            // 例如 Protocol：
+            //     org.apache.dubbo.rpc.Protocol extension = (org.apache.dubbo.rpc.Protocol)ExtensionLoader.getExtensionLoader(org.apache.dubbo.rpc.Protocol.class).getExtension(extName);
             code.append(generateExtensionAssignment());
 
-            // return statement
+            // 返回语句：
+            //     如果没有返回值的话，直接 return
+            //     如果有返回值，则返回 extension 实例的该方法
+            //         例如 Protocol.export(arg0)，实际返回的是 extension.export(arg0)
             code.append(generateReturnAndInvocation(method));
         }
 
@@ -246,19 +271,33 @@ public class AdaptiveClassCodeGenerator {
     private String generateExtNameAssignment(String[] value, boolean hasInvocation) {
         // TODO: refactor it
         String getNameCode = null;
+        // 这里从后向前遍历
         for (int i = value.length - 1; i >= 0; --i) {
+            // 当 i 为最后一个元素时
             if (i == value.length - 1) {
+                // defaultExtName 源于 SPI 注解值，默认情况下，SPI 注解值为空串，此时 defaultExtName == null
                 if (null != defaultExtName) {
+                    // protocol 是 url 的一部分，可以通过 getProtocol 方法获取
+                    // 其他则是从 URL 参数中获取
                     if (!"protocol".equals(value[i])) {
                         if (hasInvocation) {
+                            // 生成的代码功能等价于下面的代码：
+                            //     url.getMethodParameter(methodName, value[i], defaultExtName)
+                            // 以 LoadBalance 接口的 select 方法为例，最终生成的代码如下：
+                            //     url.getMethodParameter(methodName, "loadbalance", "random")
                             getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
                         } else {
+                            // 生成的代码功能等价于：
+                            //     url.getParameter(value[i], defaultExtName)
                             getNameCode = String.format("url.getParameter(\"%s\", \"%s\")", value[i], defaultExtName);
                         }
                     } else {
+                        // 生成的代码功能等价于：
+                        //     ( url.getProtocol() == null ? defaultExtName : url.getProtocol() )
                         getNameCode = String.format("( url.getProtocol() == null ? \"%s\" : url.getProtocol() )", defaultExtName);
                     }
                 } else {
+                    // 当 defaultExtName 为空时，基本逻辑和上面分支一样，不同处在于没有获取到值时，返回的是null
                     if (!"protocol".equals(value[i])) {
                         if (hasInvocation) {
                             getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
@@ -270,6 +309,7 @@ public class AdaptiveClassCodeGenerator {
                     }
                 }
             } else {
+                // 这里的分支逻辑，和之前也基本一致但差别在于如果没有取到值时，获取的不是默认值，而是上次循环获取到的值
                 if (!"protocol".equals(value[i])) {
                     if (hasInvocation) {
                         getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
@@ -282,6 +322,8 @@ public class AdaptiveClassCodeGenerator {
             }
         }
 
+        // 生成 extName 赋值代码
+        //     String extName = getNameCode;
         return String.format(CODE_EXT_NAME_ASSIGNMENT, getNameCode);
     }
 

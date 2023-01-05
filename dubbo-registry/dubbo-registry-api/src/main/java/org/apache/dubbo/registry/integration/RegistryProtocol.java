@@ -196,8 +196,9 @@ public class RegistryProtocol implements Protocol {
 
     @Override
     public <T> Exporter<T> export(final Invoker<T> originInvoker) throws RpcException {
+        // 注册中心的地址，前面改写过协议，真实的注册中心协议已经放到参数里面了，调用该方法替换协议，其他不变
         URL registryUrl = getRegistryUrl(originInvoker);
-        // url to export locally
+        // 服务提供者的 URL
         URL providerUrl = getProviderUrl(originInvoker);
 
         // Subscribe the override data
@@ -256,10 +257,12 @@ public class RegistryProtocol implements Protocol {
 
     @SuppressWarnings("unchecked")
     private <T> ExporterChangeableWrapper<T> doLocalExport(final Invoker<T> originInvoker, URL providerUrl) {
+        // 协议://host:port/interfaceName?参数
         String key = getCacheKey(originInvoker);
 
         return (ExporterChangeableWrapper<T>) bounds.computeIfAbsent(key, s -> {
             Invoker<?> invokerDelegate = new InvokerDelegate<>(originInvoker, providerUrl);
+            // 这里才是最终服务导出的功能，根据 URL 协议来加载不同的 Protocol 导出服务
             return new ExporterChangeableWrapper<>((Exporter<T>) protocol.export(invokerDelegate), originInvoker);
         });
     }
