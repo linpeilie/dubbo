@@ -27,6 +27,10 @@ import java.util.concurrent.CompletableFuture;
 public class DemoServiceImpl implements DemoService {
     private static final Logger logger = LoggerFactory.getLogger(DemoServiceImpl.class);
 
+    private String value;
+
+    public String publicValue;
+
     @Override
     public String sayHello(String name) {
         logger.info("Hello " + name + ", request from consumer: " + RpcContext.getContext().getRemoteAddress());
@@ -38,4 +42,11 @@ public class DemoServiceImpl implements DemoService {
         return null;
     }
 
+    public String getValue() {
+        return value;
+    }
+
+    public void setValue(String value) {
+        this.value = value;
+    }
 }

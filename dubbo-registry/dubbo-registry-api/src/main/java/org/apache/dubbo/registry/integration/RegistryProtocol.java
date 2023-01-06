@@ -198,19 +198,18 @@ public class RegistryProtocol implements Protocol {
     public <T> Exporter<T> export(final Invoker<T> originInvoker) throws RpcException {
         // 注册中心的地址，前面改写过协议，真实的注册中心协议已经放到参数里面了，调用该方法替换协议，其他不变
         URL registryUrl = getRegistryUrl(originInvoker);
-        // 服务提供者的 URL
+        // 服务提供者的 URL，这里会将协议改为 dubbo
         URL providerUrl = getProviderUrl(originInvoker);
 
-        // Subscribe the override data
-        // FIXME When the provider subscribes, it will affect the scene : a certain JVM exposes the service and call
-        //  the same service. Because the subscribed is cached key with the name of the service, it causes the
-        //  subscription information to cover.
+        // 获取订阅的 URL，URL 变更服务会重新发布
         final URL overrideSubscribeUrl = getSubscribedOverrideUrl(providerUrl);
+        // URL 监听器
         final OverrideListener overrideSubscribeListener = new OverrideListener(overrideSubscribeUrl, originInvoker);
         overrideListeners.put(overrideSubscribeUrl, overrideSubscribeListener);
 
         providerUrl = overrideUrlWithConfig(providerUrl, overrideSubscribeListener);
         // export invoker
+        // providerUrl 才是服务暴露的真实协议地址，在这里暴露服务
         final ExporterChangeableWrapper<T> exporter = doLocalExport(originInvoker, providerUrl);
 
         // url to registry
@@ -220,6 +219,7 @@ public class RegistryProtocol implements Protocol {
         // decide if we need to delay publish
         boolean register = providerUrl.getParameter(REGISTER_KEY, true);
         if (register) {
+            // 服务注册
             registry.register(registeredProviderUrl);
         }
 
@@ -233,6 +233,7 @@ public class RegistryProtocol implements Protocol {
         // Deprecated! Subscribe to override rules in 2.6.x or before.
         registry.subscribe(overrideSubscribeUrl, overrideSubscribeListener);
 
+        // 这里定义了注册中心事件监听器 —— RegistryProtocolListener，注册完成后，调用其 onExport 方法
         notifyExport(exporter);
         //Ensure that a new exporter instance is returned every time export
         return new DestroyableExporter<>(exporter);
@@ -261,6 +262,7 @@ public class RegistryProtocol implements Protocol {
         String key = getCacheKey(originInvoker);
 
         return (ExporterChangeableWrapper<T>) bounds.computeIfAbsent(key, s -> {
+            // 创建 Invoker 为委托类对象
             Invoker<?> invokerDelegate = new InvokerDelegate<>(originInvoker, providerUrl);
             // 这里才是最终服务导出的功能，根据 URL 协议来加载不同的 Protocol 导出服务
             return new ExporterChangeableWrapper<>((Exporter<T>) protocol.export(invokerDelegate), originInvoker);

@@ -191,6 +191,7 @@ public class ConfigValidationUtils {
         if (CollectionUtils.isNotEmpty(registries)) {
             for (RegistryConfig config : registries) {
                 String address = config.getAddress();
+                // 若 address 为空，则将其设置为 0.0.0.0
                 if (StringUtils.isEmpty(address)) {
                     address = ANYHOST_VALUE;
                 }
@@ -214,6 +215,8 @@ public class ConfigValidationUtils {
                                 .addParameter(REGISTRY_KEY, url.getProtocol())
                                 .setProtocol(extractRegistryType(url))
                                 .build();
+                        // 通过判断条件，决定是否添加 url 到 registryList 中，条件如下：
+                        // (服务提供者 && (registry || null) || (非服务提供者 && (subscribe || null)))
                         if ((provider && url.getParameter(REGISTER_KEY, true))
                                 || (!provider && url.getParameter(SUBSCRIBE_KEY, true))) {
                             registryList.add(url);
@@ -235,6 +238,7 @@ public class ConfigValidationUtils {
                         && registryURL.getParameter(REGISTRY_PUBLISH_INTERFACE_KEY, ConfigurationUtils.getDynamicGlobalConfiguration().getBoolean(DUBBO_PUBLISH_INTERFACE_DEFAULT_KEY, false))
                         && registryNotExists(registryURL, registryList, REGISTRY_PROTOCOL)) {
                     URL interfaceCompatibleRegistryURL = URLBuilder.from(registryURL)
+                            // 将 URL 协议头设置为 registry
                             .setProtocol(REGISTRY_PROTOCOL)
                             .removeParameter(REGISTRY_TYPE_KEY)
                             .build();
