@@ -202,7 +202,9 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         if (destroyed) {
             throw new IllegalStateException("The invoker of ReferenceConfig(" + url + ") has already destroyed!");
         }
+        // 检测 ref 是否为空，为空则通过 init 方法创建
         if (ref == null) {
+            // init 方法主要用于处理配置，以及调用 createProxy 生成代理类
             init();
         }
         return ref;
@@ -230,6 +232,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
     }
 
     public synchronized void init() {
+        // 避免重复初始化
         if (initialized) {
             return;
         }
@@ -244,8 +247,10 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
             bootstrap.initialize();
         }
 
+        // 检查和更新配置
         checkAndUpdateSubConfigs();
 
+        // 检查 stub、local
         checkStubAndLocal(interfaceClass);
         ConfigValidationUtils.checkMock(interfaceClass, this);
 
@@ -253,6 +258,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         map.put(SIDE_KEY, CONSUMER_SIDE);
 
         ReferenceConfigBase.appendRuntimeParameters(map);
+        // 非泛化服务
         if (!ProtocolUtils.isGeneric(generic)) {
             String revision = Version.getVersion(interfaceClass, version);
             if (revision != null && revision.length() > 0) {
@@ -310,10 +316,12 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
 
         serviceMetadata.getAttachments().putAll(map);
 
+        // 创建代理类
         ref = createProxy(map);
 
         serviceMetadata.setTarget(ref);
         serviceMetadata.addAttribute(PROXY_CLASS_REF, ref);
+        // 根据服务名、ReferenceConfig和代理类构建 ConsumerModel
         ConsumerModel consumerModel = repository.lookupReferredService(serviceMetadata.getServiceKey());
         consumerModel.setProxyObject(ref);
         consumerModel.init(attributes);
@@ -322,21 +330,26 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
 
         checkInvokerAvailable();
 
-        // dispatch a ReferenceConfigInitializedEvent since 2.7.4
+        // 方法引用初始化完成事件 —— ReferenceConfigInitializedEvent
         dispatch(new ReferenceConfigInitializedEvent(this, invoker));
     }
 
     @SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
     private T createProxy(Map<String, String> map) {
         if (shouldJvmRefer(map)) {
+            // 生成本地引用 URL，协议为 injvm
             URL url = new URL(LOCAL_PROTOCOL, LOCALHOST_VALUE, 0, interfaceClass.getName()).addParameters(map);
+            // 调用 InjvmProtocol.ref 方法构建 InjvmInvoker 实例
             invoker = REF_PROTOCOL.refer(interfaceClass, url);
             if (logger.isInfoEnabled()) {
                 logger.info("Using injvm service " + interfaceClass.getName());
             }
+        // 远程调用
         } else {
             urls.clear();
+            // url 不为空，表明用户可能想要进行点对点调用
             if (url != null && url.length() > 0) { // user specified URL, could be peer-to-peer address, or register center's address.
+                // 可以配置多个 url，用分号进行分隔
                 String[] us = SEMICOLON_SPLIT_PATTERN.split(url);
                 if (us != null && us.length > 0) {
                     for (String u : us) {
@@ -355,6 +368,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
                 // if protocols not injvm checkRegistry
                 if (!LOCAL_PROTOCOL.equalsIgnoreCase(getProtocol())) {
                     checkRegistry();
+                    // 加载注册中心
                     List<URL> us = ConfigValidationUtils.loadRegistries(this, false);
                     if (CollectionUtils.isNotEmpty(us)) {
                         for (URL u : us) {
@@ -374,8 +388,11 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
                 }
             }
 
+            // 单个注册中心或者服务提供者
             if (urls.size() == 1) {
+                // 调用 RegistryProtocol.refer 构建 Invoker 实例
                 invoker = REF_PROTOCOL.refer(interfaceClass, urls.get(0));
+            // 多个注册中心
             } else {
                 List<Invoker<?>> invokers = new ArrayList<Invoker<?>>();
                 URL registryURL = null;
@@ -440,8 +457,9 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         if (StringUtils.isEmpty(interfaceName)) {
             throw new IllegalStateException("<dubbo:reference interface=\"\" /> interface not allow null!");
         }
+        // 使用 ConsumerConfig 默认配置
         completeCompoundConfigs(consumer);
-        // get consumer's global configuration
+        // ConsumerConfig 不存在会自动创建
         checkDefault();
 
         // init some null configuration.
@@ -449,6 +467,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
                 .getActivateExtension(URL.valueOf("configInitializer://"), (String[]) null);
         configInitializers.forEach(e -> e.initReferConfig(this));
 
+        // 自身属性根据优先级刷新
         this.refresh();
         if (getGeneric() == null && getConsumer() != null) {
             setGeneric(getConsumer().getGeneric());
@@ -465,11 +484,13 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
             checkInterfaceAndMethods(interfaceClass, getMethods());
         }
 
+        // 初始化服务元数据
         initServiceMetadata(consumer);
         serviceMetadata.setServiceType(getActualInterface());
         // TODO, uncomment this line once service key is unified
         serviceMetadata.setServiceKey(URL.buildKey(interfaceName, group, version));
 
+        // 把要消费的服务注册到本地 ServiceRepository
         ServiceRepository repository = ApplicationModel.getServiceRepository();
         ServiceDescriptor serviceDescriptor = repository.registerService(interfaceClass);
         repository.registerConsumer(
@@ -479,6 +500,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
                 null,
                 serviceMetadata);
 
+        // 解析 dubbo.resolve.file 文件，该文件中可以直接指定服务提供者的地址，判断是否需要点对点直连 Provider
         resolveFile();
         ConfigValidationUtils.validateReferenceConfig(this);
         postProcessConfig();
@@ -501,7 +523,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
             if (url != null && url.length() > 0) {
                 isJvmRefer = false;
             } else {
-                // by default, reference local service if there is
+                // 根据 url 的协议、scope 以及 injvm 等参数检测是否需要本地引用
                 isJvmRefer = InjvmProtocol.getInjvmProtocol().isInjvmRefer(tmpUrl);
             }
         } else {
