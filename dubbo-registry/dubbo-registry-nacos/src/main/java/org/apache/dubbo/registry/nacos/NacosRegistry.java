@@ -151,15 +151,12 @@ public class NacosRegistry extends FailbackRegistry {
 
     @Override
     public void doRegister(URL url) {
+        // 服务名称
         final String serviceName = getServiceName(url);
 
+        // 创建实例，实例中主要有IP、端口和元数据信息
         final Instance instance = createInstance(url);
-        /**
-         *  namingService.registerInstance with {@link org.apache.dubbo.registry.support.AbstractRegistry#registryUrl}
-         *  default {@link DEFAULT_GROUP}
-         *
-         * in https://github.com/apache/dubbo/issues/5978
-         */
+        // 调用 namingService 注册实例
         execute(namingService -> namingService.registerInstance(serviceName,
                 getUrl().getParameter(GROUP_KEY, Constants.DEFAULT_GROUP), instance));
     }

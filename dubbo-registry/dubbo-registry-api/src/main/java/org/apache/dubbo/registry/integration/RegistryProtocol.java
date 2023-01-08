@@ -364,7 +364,9 @@ public class RegistryProtocol implements Protocol {
      * @return
      */
     protected Registry getRegistry(final Invoker<?> originInvoker) {
+        // 获取注册中心地址
         URL registryUrl = getRegistryUrl(originInvoker);
+        // SPI 加载 Registry 实现
         return getRegistry(registryUrl);
     }
 

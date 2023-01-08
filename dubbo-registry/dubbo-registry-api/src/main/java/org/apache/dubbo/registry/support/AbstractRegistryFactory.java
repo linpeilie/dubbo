@@ -124,11 +124,7 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
 
     @Override
     public Registry getRegistry(URL url) {
-
-        Registry defaultNopRegistry = getDefaultNopRegistryIfDestroyed();
-        if (null != defaultNopRegistry) {
-            return defaultNopRegistry;
-        }
+        // ...省略销毁时的校验
 
         url = URLBuilder.from(url)
                 .setPath(RegistryService.class.getName())
@@ -139,18 +135,13 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
         // Lock the registry access process to ensure a single instance of the registry
         LOCK.lock();
         try {
-            // double check
-            // fix https://github.com/apache/dubbo/issues/7265.
-            defaultNopRegistry = getDefaultNopRegistryIfDestroyed();
-            if (null != defaultNopRegistry) {
-                return defaultNopRegistry;
-            }
+            // ...省略销毁时的校验
 
             Registry registry = REGISTRIES.get(key);
             if (registry != null) {
                 return registry;
             }
-            //create registry by spi/ioc
+            // 缓存未命中的话，创建 Registry 实例
             registry = createRegistry(url);
             if (registry == null) {
                 throw new IllegalStateException("Can not create registry " + url);
